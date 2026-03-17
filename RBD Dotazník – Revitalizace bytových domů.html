@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RBD Dotazník – Revitalizace bytových domů</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f4fb;min-height:100vh}
+#header{background:#1a2035;color:#fff;padding:12px 20px;position:sticky;top:0;z-index:300;box-shadow:0 2px 14px rgba(0,0,0,.45)}
+#header-inner{max-width:880px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+#title{font-size:15px;font-weight:700;letter-spacing:.2px}
+#subtitle{font-size:11px;color:#8fa;margin-top:1px}
+#subtitle strong{color:#7ecfb3}
+#subtitle .photos{color:#fcd36a}
+#export-btn{background:#2ecc71;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-weight:700;font-size:14px;cursor:pointer;min-width:145px;transition:background .3s}
+#export-btn:disabled{opacity:.7;cursor:not-allowed}
+#tabs-bar{background:#fff;border-bottom:2px solid #e4e9f2;position:sticky;top:54px;z-index:200;overflow-x:auto}
+#tabs-inner{max-width:880px;margin:0 auto;display:flex}
+.tab-btn{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:500;color:#666;border-bottom:3px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:4px;font-family:inherit;transition:all .15s}
+.tab-btn.active{font-weight:700;border-bottom-width:3px;border-bottom-style:solid}
+#content{max-width:880px;margin:0 auto;padding:18px 16px 48px}
+.group-card{background:#fff;border-radius:12px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.07)}
+.group-header{padding:9px 16px;border-left:4px solid}
+.group-header span{font-weight:700;font-size:13px}
+.group-body{padding:14px 16px}
+.field{margin-bottom:14px}
+.field label{font-size:13px;font-weight:600;color:#2c3e50;display:flex;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:2px}
+.field label .unit{font-weight:400;color:#999;margin-left:3px}
+.field input,.field select,.field textarea{width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid #dde3ee;font-size:15px;outline:none;font-family:inherit;background:#fff;transition:border-color .2s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#1a4f8a}
+.field textarea{resize:vertical;min-height:52px}
+.field select{cursor:pointer}
+.info-btn{width:17px;height:17px;border-radius:50%;border:1.5px solid #1a4f8a;background:#deeaff;color:#1a4f8a;font-weight:800;font-size:9px;cursor:pointer;padding:0;margin-left:5px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;position:relative;font-family:inherit}
+.tooltip-popup{display:none;position:absolute;left:22px;top:-6px;z-index:9999;background:#1a2035;color:#e8eeff;padding:10px 14px;border-radius:9px;font-size:12px;width:240px;box-shadow:0 8px 28px rgba(0,0,0,.4);line-height:1.6;pointer-events:none;font-weight:400}
+.info-btn:focus .tooltip-popup,.info-btn:hover .tooltip-popup{display:block}
+.photo-btn{background:#f0f5ff;border:1.5px dashed #1a4f8a;border-radius:7px;padding:5px 12px;font-size:12px;color:#1a4f8a;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit;margin-top:5px}
+.photo-preview{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.photo-thumb{position:relative}
+.photo-thumb img{width:64px;height:64px;object-fit:cover;border-radius:7px;border:1px solid #ccd}
+.photo-thumb .remove-photo{position:absolute;top:-5px;right:-5px;background:#c0392b;color:#fff;border:none;border-radius:50%;width:17px;height:17px;font-size:11px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;font-family:inherit}
+#footer{text-align:center;padding-bottom:28px;color:#bbb;font-size:11px}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-inner">
+    <div>
+      <div id="title">📋 RBD Dotazník – Revitalizace bytových domů</div>
+      <div id="subtitle">Vyplněno: <strong id="filled-count">0</strong>/<span id="total-count">0</span> polí &nbsp;·&nbsp; <span class="photos" id="photo-count">0 fotek</span></div>
+    </div>
+    <button id="export-btn" onclick="exportXLSX()">⬇ Export XLSX</button>
+  </div>
+</div>
+
+<div id="tabs-bar">
+  <div id="tabs-inner"></div>
+</div>
+
+<div id="content"></div>
+<div id="footer">Data jsou uložena pouze v prohlížeči · Pro trvalé uložení použijte Export XLSX</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const INFO = {
+  "Požární výška":"Výška budovy od upraveného terénu po nejvyšší bod střechy. Slouží pro požární klasifikaci objektu.",
+  "Zateplovaná výška štít":"Výška plochy štítové stěny určené k zateplení – od soklu po střechu.",
+  "Zateplovaná výška průčelí":"Výška přední nebo zadní fasády určené k zateplení.",
+  "Světlá výška v bytě":"Světlá výška místností v typickém nadzemním podlaží (od podlahy po podhled).",
+  "Světlá výška v suterénu":"Světlá výška v suterénním podlaží.",
+  "Výška sut nadpraží/podlaha":"Výška nadpraží suterénních oken měřená od úrovně podlahy.",
+  "Výška sut nadpraží/podhled":"Výška nadpraží suterénních oken měřená od podhledu stropní konstrukce.",
+  "Výška sokl štít 1":"Výška soklové části (nezateplené části u základů) na štítové stěně č. 1.",
+  "Výška sokl štít 2":"Výška soklové části na štítové stěně č. 2.",
+  "Výška sokl průčelí vstup":"Výška soklu na vstupním průčelí budovy.",
+  "Výška sokl zadní průčelí":"Výška soklu na zadní straně budovy.",
+  "Konstrukční výška PŮDA":"Celková konstrukční výška půdního prostoru (od podlahy po vrchol konstrukce).",
+  "Konstrukční výška SUTERÉN":"Celková konstrukční výška suterénního podlaží.",
+  "Dřevěná okna na domě":"Jsou na domě původní dřevěná okna? Pokud ano, uveďte počty a rozměry v poznámce.",
+  "Obvodová stěna – Materiál":"Materiál nosné obvodové stěny (cihla plná, dutinová, panel, ytong, beton…).",
+  "Obvodová stěna – tl. (m)":"Tloušťka obvodové stěny v metrech.",
+  "Strop nad nejvyšším podlažím – Materiál":"Materiál stropní konstrukce nad posledním obytným podlažím.",
+  "Strop nad nejvyšším podlažím – tl. (m)":"Tloušťka stropní konstrukce v metrech.",
+  "Střecha – Materiál":"Materiál střešní krytiny (taška, plech, fólie, beton…).",
+  "Střecha – tl. (m)":"Tloušťka střešní/zateplené konstrukce v metrech.",
+  "Strop nad suterénem – Materiál":"Materiál stropní desky oddělující suterén od přízemí.",
+  "Strop nad suterénem – tl. (m)":"Tloušťka stropní desky v metrech.",
+  "Rozměry půdy":"Celkové půdorysné rozměry půdního prostoru (délka × šířka v metrech).",
+  "Přístup na půdu – výlezy (ks)":"Počet samostatných výlezových otvorů na půdu (bez schodiště).",
+  "Přístup na půdu – schodišťový prostor (ks)":"Počet schodišťových prostorů vedoucích na půdu.",
+  "Rozměr schod. prostoru – šířka (m)":"Šířka průlezu schodišťového prostoru na půdu.",
+  "Rozměr schod. prostoru – hloubka (m)":"Hloubka průlezu schodišťového prostoru na půdu.",
+  "Rozměr schod. prostoru – výška (m)":"Světlá výška průchodu výlezem na půdu.",
+  "Plocha vestavby (m²)":"Podlahová plocha vestavby v půdním prostoru v m².",
+  "Rozměry vestavby":"Délka × šířka vestavby v metrech.",
+  "Plocha suterénního bytu (m²)":"Podlahová plocha suterénního bytu v m².",
+  "Venkovní rozměry suterénního bytu":"Vnější rozměry suterénního bytu (délka × šířka v metrech).",
+  "Půda – zateplení":"Je půda aktuálně zateplena?",
+  "Půda – plocha (m²)":"Plocha stávajícího zateplení půdy v m².",
+  "Půda – tloušťka (m)":"Tloušťka stávající tepelné izolace na půdě v metrech.",
+  "Suterén – zateplení":"Je strop nad suterénem nebo stěny aktuálně zatepleny?",
+  "Suterén – plocha (m²)":"Plocha stávajícího zateplení suterénu v m².",
+  "Suterén – tloušťka (m)":"Tloušťka stávající tepelné izolace v suterénu v metrech.",
+  "KZS štíty – zateplení":"Je kontaktní zateplovací systém (KZS) na štítech již proveden?",
+  "KZS štíty – plocha (m²)":"Plocha stávajícího KZS na štítech v m².",
+  "KZS štíty – tloušťka (m)":"Tloušťka stávající izolace KZS na štítech v metrech.",
+  "KZS průčelí – zateplení":"Je KZS na průčelích (fasádách) již proveden?",
+  "KZS průčelí – plocha (m²)":"Plocha stávajícího KZS na průčelích v m².",
+  "KZS průčelí – tloušťka (m)":"Tloušťka stávající izolace KZS na průčelích v metrech.",
+  "Počet vchodů":"Celkový počet vchodů (sekcí) bytového domu.",
+  "Počet NP":"Počet nadzemních podlaží (bez suterénu a půdy).",
+  "Počet BJ":"Celkový počet bytových jednotek v domě.",
+  "Stáří domu":"Přibližný rok výstavby nebo stáří objektu.",
+  "Způsob vytápění":"Aktuální způsob vytápění objektu (CZT, plyn, tuhá paliva, elektro…).",
+  "Provozovatel CZT":"Název společnosti dodávající teplo z centrálního zásobování teplem.",
+  "Cena za ROK/Teplo (Kč)":"Celkové roční náklady na teplo (pouze vytápění) v Kč.",
+  "Cena za ROK/Teplo+TUV (Kč)":"Celkové roční náklady na teplo včetně ohřevu teplé vody v Kč.",
+  "Vlastní zdroje z FO (Kč)":"Objem vlastních finančních prostředků fondu oprav dostupných pro investici.",
+  "Měsíční FO za celé SVJ (Kč)":"Celková měsíční platba do fondu oprav za celé SVJ v Kč.",
+  "Měsíční náklady za SVJ (Kč)":"Celkové měsíční provozní náklady SVJ v Kč.",
+  "Banka SVJ":"Název banky, u které má SVJ vedený účet.",
+  "Střešní krytina – zájem":"Je požadována výměna nebo oprava střešní krytiny?",
+  "Střešní krytina – výška hřebene (m)":"Výška hřebene střechy nad terénem v metrech.",
+  "Střešní krytina – typ":"Typ požadované střešní krytiny nebo rozsah opravy.",
+  "Plochá střecha – zájem":"Je požadována oprava nebo rekonstrukce ploché střechy?",
+  "Plochá střecha – typ":"Typ požadované ploché střechy nebo materiál.",
+  "Plochá střecha – provedení":"Způsob provedení (zateplení, spádování, nová hydroizolace…).",
+  "Furanflex – zájem":"Je požadováno vložkování komínu metodou Furanflex (flexibilní vložka)?",
+  "Magmarelax – zájem":"Je požadována minerální tepelná izolace komínu metodou Magmarelax?",
+  "Magmarelax – způsob":"Upřesněte způsob provedení Magmarelaxu.",
+  "Ošetření krovu – zájem":"Je požadováno ošetření dřevěného krovu (impregnace, sanace, výměna)?",
+  "Ošetření krovu – způsob":"Upřesněte způsob ošetření krovu.",
+  "KZS – zájem":"Je požadován kontaktní zateplovací systém fasády?",
+  "KZS – typ materiálu":"Typ izolantu KZS (EPS, MW, grafitové EPS…).",
+  "KZS – tloušťka (mm)":"Požadovaná tloušťka tepelné izolace KZS v milimetrech.",
+  "Sokl – zájem":"Je požadováno zateplení nebo oprava soklu?",
+  "Sokl – typ materiálu":"Typ izolantu soklu (XPS, perimetr…).",
+  "Sokl – tloušťka (mm)":"Požadovaná tloušťka tepelné izolace soklu v milimetrech.",
+  "Okna byt – zájem":"Je požadována výměna oken v bytech?",
+  "Okna byt – barva":"Požadovaná barva rámů bytových oken.",
+  "Okna spol. prostory – zájem":"Je požadována výměna oken ve společných prostorách?",
+  "Okna spol. prostory – barva":"Požadovaná barva rámů oken ve společných prostorách.",
+  "Okna suterén – zájem":"Je požadována výměna suterénních oken?",
+  "Okna suterén – barva":"Požadovaná barva rámů suterénních oken.",
+  "Vchodové dveře – zájem":"Je požadována výměna vchodových dveří?",
+  "Vchodové dveře – barva":"Požadovaná barva vchodových dveří.",
+  "Vchodové dveře – provedení":"Typ provedení (prosklené, plné, s bočním světlíkem…).",
+  "Balkony oprava – zájem":"Je požadována oprava stávajících balkonů?",
+  "Balkony oprava – vnější rozměr":"Vnější rozměry balkonu (šířka × hloubka v metrech).",
+  "Balkony oprava – zábradlí":"Typ zábradlí balkonů (ocel, nerez, sklo…).",
+  "Antigraffiti – zájem":"Je požadována aplikace antigraffiti nátěru nebo ochrany?",
+  "Modernizace OS – zájem":"Je požadována modernizace otopné soustavy?",
+  "Balkony nové – zájem":"Je požadována výstavba nových balkonů?",
+  "Balkony nové – rozměr":"Standardní rozměr nových balkonů.",
+  "Balkony nové – rozměr atyp":"Atypický rozměr nových balkonů (délka × šířka v metrech).",
+  "Balkony nové – zábradlí":"Typ zábradlí nových balkonů.",
+  "Lodžie nové – zájem":"Je požadována výstavba nových lodžií?",
+  "Lodžie nové – rozměr":"Standardní rozměr nových lodžií.",
+  "Lodžie nové – zábradlí":"Typ zábradlí nových lodžií.",
+  "Terasy nové – zájem":"Je požadována výstavba nových teras?",
+  "Terasy nové – rozměr (m)":"Rozměr nových teras v metrech.",
+  "Terasy nové – zábradlí":"Typ zábradlí nových teras.",
+  "Strop suterénu – zájem":"Je požadována oprava stropu suterénu?",
+  "Strop suterénu – způsob":"Způsob opravy – napiš rozměr trámů: šířka, výška, mezera.",
+  "Hydroizolace – zájem":"Je požadována hydroizolace základů nebo suterénního zdiva?",
+  "Hydroizolace – výška sut. nadpraží/podlaha":"Výška nadpraží suterénních oken od podlahy (pro výpočet rozsahu hydroizolace).",
+  "Okapový chodníček – zájem":"Je požadováno provedení nebo oprava okapového chodníčku?",
+  "Výtah – zájem":"Je požadována instalace nebo modernizace výtahu?",
+  "FVE – zájem":"Fotovoltaická elektrárna – je požadována instalace FVE na střeše?",
+  "TUV – zájem":"Je požadován ohřev teplé vody pomocí FVE nebo jiné technologie?",
+  "Spotřeba byty (kWh)":"Celková roční spotřeba elektrické energie v bytech v kWh.",
+  "Náklady na plyn (Kč)":"Celkové roční náklady na plyn v Kč.",
+  "Spotřeba plynu (m³)":"Celková roční spotřeba zemního plynu v m³.",
+  "Spotřeba spol. prostory (kWh)":"Roční spotřeba elektrické energie ve společných prostorách v kWh.",
+  "Náklady na teplo (Kč)":"Celkové roční náklady na teplo z CZT v Kč.",
+  "Elektroměry spol. prostor (ks)":"Počet elektroměrů instalovaných ve společných prostorách.",
+  "Spotřeba tepla (GJ)":"Celková roční spotřeba tepla z CZT v GJ.",
+  "Výška domu (bm)":"Celková výška domu v metrech (od terénu po hřeben nebo atiku).",
+  "Renovace – zájem":"Je požadována renovace stávající fasády (oprava bez výměny – bez KZS)?",
+  "Renovace – poškození":"Popis nebo odhad rozsahu poškození stávající fasády.",
+  "Opravy na domě – rok štíty":"Rok provedení poslední opravy nebo zateplení štítů.",
+  "Opravy na domě – rok průčelí":"Rok provedení poslední opravy nebo zateplení průčelí.",
+  "Opravy na domě – rok střecha":"Rok provedení poslední opravy střechy.",
+  "Opravy na domě – rok okna":"Rok výměny nebo poslední opravy oken.",
+  "Opravy na domě – rok suterén":"Rok provedení poslední opravy suterénu.",
+  "Opravy na domě – rok výtah":"Rok instalace nebo poslední modernizace výtahu.",
+  "Opravy na domě – tl./spec. štíty":"Tloušťka izolace nebo popis provedené opravy štítů.",
+  "Opravy na domě – tl./spec. průčelí":"Tloušťka izolace nebo popis opravy průčelí.",
+  "Opravy na domě – tl./spec. střecha":"Tloušťka izolace nebo popis opravy střechy.",
+  "Opravy na domě – tl./spec. okna":"Specifikace provedené výměny nebo opravy oken.",
+  "Opravy na domě – tl./spec. suterén":"Specifikace opravy suterénu.",
+  "Opravy na domě – tl./spec. výtah":"Specifikace modernizace výtahu.",
+  "Rekuperace – zájem":"Je požadována instalace rekuperačního větrání v bytech?",
+  "Rekuperace – druh":"Centrální (jeden celek pro dům) nebo decentrální (jednotka v každém bytě).",
+  "Rekuperace – BJ dispozice 1":"Počet bytů dispozice 1+kk nebo 1+1 pro dimenzování rekuperace.",
+  "Rekuperace – BJ dispozice 2":"Počet bytů dispozice 2+kk nebo 2+1.",
+  "Rekuperace – BJ dispozice 3":"Počet bytů dispozice 3+kk nebo 3+1.",
+  "Rekuperace – BJ dispozice 4":"Počet bytů dispozice 4+kk nebo 4+1.",
+  "Rekuperace – BJ dispozice 5":"Počet bytů dispozice 5+kk nebo 5+1.",
+  "Rekuperace – BJ dispozice 6":"Počet bytů dispozice 6+kk nebo 6+1.",
+  "Elektroinstalace spol. prostor – zájem":"Je požadována obnova elektroinstalace ve společných prostorách?",
+  "Elektroinstalace – s FVE":"Má být elektroinstalace provedena s ohledem na budoucí FVE?",
+  "Počet místností v suterénu":"Celkový počet místností (sklepní kóje, technické místnosti) v suterénu.",
+  "Délky chodeb v suterénu (bm)":"Celková délka chodeb v suterénu v běžných metrech.",
+  "Tepelné čerpadlo – zájem":"Je požadována instalace TČ pro ohřev TV? Pokud ano, vyplňte sekci TČ níže.",
+  "Plynová kotelna – zájem":"Je požadována instalace nebo rekonstrukce plynové kotelny? Pokud ano, vyplňte sekci Kotelna níže.",
+  "TČ – počet vchodů":"Celkový počet vchodů bytového domu pro dimenzování TČ.",
+  "TČ – počet BJ":"Celkový počet bytových jednotek pro výpočet potřeby TV.",
+  "TČ – spotřeba tepla na ohřev TV (GJ/rok)":"Roční průměrná spotřeba tepla na ohřev TV – průměr za poslední 3 roky.",
+  "TČ – spotřeba TV (m³/rok)":"Roční průměrná spotřeba vody ohřáté na TUV – průměr za poslední 3 roky.",
+  "TČ – cena za GJ tepla (Kč)":"Průměrná cena za 1 GJ tepla od stávajícího dodavatele za poslední 2 roky.",
+  "TČ – cena za MWh elektrické energie (Kč)":"Aktuální nebo průměrná cena elektrické energie za 1 MWh.",
+  "TČ – možnost umístění":"Popište nebo přiložte nákres kde bude TČ umístěno (venku u domu, technická místnost…).",
+  "TČ – stávající zdroje tepla":"Jaký je stávající způsob vytápění a ohřevu TV (CZT, plyn, tuhá paliva…)?",
+  "TČ – předávací stanice":"Typ předávací stanice: dvoutrubková, čtyřtrubková nebo lokální kotelna.",
+  "TČ – vzdálenost TČ a tech. místnosti (m)":"Délka potrubní trasy mezi umístěním TČ a technickou místností v metrech.",
+  "TČ – je objekt zateplený":"Byl objekt v minulosti zateplen fasádním KZS?",
+  "TČ – rok zateplení":"Rok provedení zateplení fasády (pokud bylo provedeno).",
+  "TČ – vyměněná okna":"Byla na domě vyměněna okna za plastová nebo jiná moderní?",
+  "Kotelna – počet vchodů":"Celkový počet vchodů bytového domu pro dimenzování kotelny.",
+  "Kotelna – počet BJ":"Celkový počet bytových jednotek v domě.",
+  "Kotelna – spotřeba tepla na topení (GJ/rok)":"Roční průměrná spotřeba tepla na vytápění – průměr za poslední 3 roky.",
+  "Kotelna – spotřeba TV (m³/rok)":"Roční průměrná spotřeba teplé vody – průměr za poslední 3 roky.",
+  "Kotelna – cena za GJ tepla (Kč)":"Průměrná cena za 1 GJ tepla od stávajícího dodavatele za poslední 2 roky.",
+  "Kotelna – cena za MWh plynu (m³)":"Aktuální nebo průměrná cena zemního plynu (Kč/m³).",
+  "Kotelna – tepelná ztráta objektu (kW)":"Celková tepelná ztráta objektu dle PENB v kW.",
+  "Kotelna – plynová přípojka":"Existuje v domě přípojka zemního plynu? Uveďte tlak a dimenzi.",
+  "Kotelna – komín typ":"Typ komínového tělesa (zděný, nerezový vložkovaný, fasádní odvod…).",
+  "Kotelna – komín materiál":"Materiál komínového tělesa (cihla, beton, nerezová vložka…).",
+  "Kotelna – komín vedení":"Kudy komín vede – po fasádě, přes zeď, uvnitř dispozice apod.",
+  "Kotelna – výška komínu (bm)":"Celková výška komínového tělesa v běžných metrech.",
+  "Kotelna – počet komínů (ks)":"Celkový počet komínových průduchů nebo těles v domě.",
+  "Kotelna – otopná soustava":"Typ otopné soustavy (radiátory, podlahové topení, konvektory…).",
+  "Kotelna – způsob provozu":"Kdo provozuje stávající kotelnu – vlastní provoz SVJ, správcovská firma?",
+  "Kotelna – stávající zdroj tepla":"CZT, vlastní plynová kotelna (rekonstrukce), tuhá paliva nebo jiné.",
+  "Kotelna – předávací stanice":"Typ stávající předávací stanice nebo způsob napojení na zdroj tepla.",
+  "Kotelna – vzdálenost tech. místnost–UT (m)":"Vzdálenost technické místnosti od místa napojení na otopnou soustavu.",
+  "Kotelna – vzdálenost tech. místnost–TV (m)":"Vzdálenost technické místnosti od místa napojení na rozvod teplé vody.",
+  "Kotelna – je objekt zateplený":"Byl objekt v minulosti zateplen fasádním KZS?",
+  "Kotelna – rok zateplení":"Rok provedení zateplení fasády.",
+  "Kotelna – vyměněná okna":"Byla na domě vyměněna okna za plastová nebo jiná moderní?",
+};
+
+const TABS = [
+  {key:"zameni",label:"Zaměření",icon:"📐",color:"#1a4f8a",accent:"#e8f0fb",groups:[
+    {title:"Výšky budovy",fields:[
+      {key:"poz_vyska",label:"Požární výška",unit:"m",type:"number"},
+      {key:"sokl_stit1",label:"Výška sokl štít 1",unit:"m",type:"number"},
+      {key:"zat_stit",label:"Zateplovaná výška štít",unit:"m",type:"number"},
+      {key:"sokl_stit2",label:"Výška sokl štít 2",unit:"m",type:"number"},
+      {key:"zat_pruceli",label:"Zateplovaná výška průčelí",unit:"m",type:"number"},
+      {key:"sokl_vstup",label:"Výška sokl průčelí vstup",unit:"m",type:"number"},
+      {key:"svetla_byt",label:"Světlá výška v bytě",unit:"m",type:"number"},
+      {key:"sokl_zadni",label:"Výška sokl zadní průčelí",unit:"m",type:"number"},
+      {key:"svetla_sut",label:"Světlá výška v suterénu",unit:"m",type:"number"},
+      {key:"kons_puda",label:"Konstrukční výška PŮDA",unit:"m",type:"number"},
+      {key:"sut_podlaha",label:"Výška sut nadpraží/podlaha",unit:"m",type:"number"},
+      {key:"kons_sut",label:"Konstrukční výška SUTERÉN",unit:"m",type:"number"},
+      {key:"sut_podhled",label:"Výška sut nadpraží/podhled",unit:"m",type:"number"},
+      {key:"pozn_vysky",label:"Poznámka",type:"textarea"},
+    ]},
+    {title:"Dřevěná okna",fields:[
+      {key:"drevena_okna",label:"Dřevěná okna na domě",type:"select",options:["Ne","Ano"]},
+      {key:"drevena_okna_pozn",label:"Počty a rozměry oken (pokud Ano)",type:"textarea"},
+    ]},
+    {title:"Skladby konstrukcí",fields:[
+      {key:"obv_material",label:"Obvodová stěna – Materiál",type:"text",photo:true},
+      {key:"obv_tl",label:"Obvodová stěna – tl. (m)",type:"number"},
+      {key:"strop_np_mat",label:"Strop nad nejvyšším podlažím – Materiál",type:"text"},
+      {key:"strop_np_tl",label:"Strop nad nejvyšším podlažím – tl. (m)",type:"number"},
+      {key:"strecha_mat",label:"Střecha – Materiál",type:"text"},
+      {key:"strecha_tl",label:"Střecha – tl. (m)",type:"number"},
+      {key:"strop_sut_mat",label:"Strop nad suterénem – Materiál",type:"text"},
+      {key:"strop_sut_tl",label:"Strop nad suterénem – tl. (m)",type:"number"},
+      {key:"pozn_skladby",label:"Poznámka",type:"textarea"},
+    ]},
+    {title:"Půda",fields:[
+      {key:"puda_rozmery",label:"Rozměry půdy",type:"text",photo:true},
+      {key:"puda_vylezy",label:"Přístup na půdu – výlezy (ks)",type:"number",photo:true},
+      {key:"puda_schodiste",label:"Přístup na půdu – schodišťový prostor (ks)",type:"number"},
+      {key:"schod_sirka",label:"Rozměr schod. prostoru – šířka (m)",type:"number"},
+      {key:"schod_hloubka",label:"Rozměr schod. prostoru – hloubka (m)",type:"number"},
+      {key:"schod_vyska",label:"Rozměr schod. prostoru – výška (m)",type:"number"},
+      {key:"pozn_puda",label:"Poznámka",type:"textarea"},
+    ]},
+    {title:"Vestavby a suterénní byty",fields:[
+      {key:"vestavba_plocha",label:"Plocha vestavby (m²)",type:"number"},
+      {key:"vestavba_rozmery",label:"Rozměry vestavby",type:"text"},
+      {key:"sut_byt_plocha",label:"Plocha suterénního bytu (m²)",type:"number"},
+      {key:"sut_byt_rozmery",label:"Venkovní rozměry suterénního bytu",type:"text"},
+      {key:"pozn_vestavby",label:"Poznámka",type:"textarea"},
+    ]},
+    {title:"Stávající zateplení",fields:[
+      {key:"zat_puda",label:"Půda – zateplení",type:"select",options:["Ne","Ano"]},
+      {key:"zat_puda_plocha",label:"Půda – plocha (m²)",type:"number"},
+      {key:"zat_puda_tl",label:"Půda – tloušťka (m)",type:"number"},
+      {key:"zat_sut",label:"Suterén – zateplení",type:"select",options:["Ne","Ano"]},
+      {key:"zat_sut_plocha",label:"Suterén – plocha (m²)",type:"number"},
+      {key:"zat_sut_tl",label:"Suterén – tloušťka (m)",type:"number"},
+      {key:"zat_kzs_stit",label:"KZS štíty – zateplení",type:"select",options:["Ne","Ano"]},
+      {key:"zat_kzs_stit_plocha",label:"KZS štíty – plocha (m²)",type:"number"},
+      {key:"zat_kzs_stit_tl",label:"KZS štíty – tloušťka (m)",type:"number"},
+      {key:"zat_kzs_pruc",label:"KZS průčelí – zateplení",type:"select",options:["Ne","Ano"]},
+      {key:"zat_kzs_pruc_plocha",label:"KZS průčelí – plocha (m²)",type:"number"},
+      {key:"zat_kzs_pruc_tl",label:"KZS průčelí – tloušťka (m)",type:"number"},
+      {key:"pozn_zat",label:"Poznámka",type:"textarea"},
+    ]},
+  ]},
+  {key:"zakladni",label:"Základní údaje",icon:"🏢",color:"#2c3e50",accent:"#eaecf0",groups:[
+    {title:"Budova",fields:[
+      {key:"pocet_vchodu",label:"Počet vchodů",type:"number"},
+      {key:"pocet_np",label:"Počet NP",type:"number"},
+      {key:"pocet_bj",label:"Počet BJ",type:"number"},
+      {key:"stari_domu",label:"Stáří domu",type:"text"},
+      {key:"vytapeni",label:"Způsob vytápění",type:"select",options:["CZT","Plyn – vlastní kotelna","Plyn – lokální","Tuhá paliva","Elektro","Jiný"]},
+      {key:"provozovatel_czt",label:"Provozovatel CZT",type:"text"},
+      {key:"cena_rok_teplo",label:"Cena za ROK/Teplo (Kč)",type:"number"},
+      {key:"cena_rok_teplo_tuv",label:"Cena za ROK/Teplo+TUV (Kč)",type:"number"},
+    ]},
+    {title:"Finance SVJ",fields:[
+      {key:"fo_vlastni",label:"Vlastní zdroje z FO (Kč)",type:"number"},
+      {key:"fo_mesicni",label:"Měsíční FO za celé SVJ (Kč)",type:"number"},
+      {key:"naklady_mesicni",label:"Měsíční náklady za SVJ (Kč)",type:"number"},
+      {key:"banka_svj",label:"Banka SVJ",type:"text"},
+      {key:"pozn_finance",label:"Poznámka",type:"textarea"},
+    ]},
+  ]},
+  {key:"pozadavky",label:"Požadavky",icon:"📋",color:"#6d3b8a",accent:"#f4edfb",groups:[
+    {title:"Střecha & Komín",fields:[
+      {key:"req_strecha",label:"Střešní krytina – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_strecha_heben",label:"Střešní krytina – výška hřebene (m)",type:"number"},
+      {key:"req_strecha_typ",label:"Střešní krytina – typ",type:"text"},
+      {key:"req_strecha_pozn",label:"Pozn. (střešní krytina)",type:"textarea"},
+      {key:"req_ploche",label:"Plochá střecha – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_ploche_typ",label:"Plochá střecha – typ",type:"text"},
+      {key:"req_ploche_provedeni",label:"Plochá střecha – provedení",type:"text"},
+      {key:"req_ploche_pozn",label:"Pozn. (plochá střecha)",type:"textarea"},
+      {key:"req_furanflex",label:"Furanflex – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_furanflex_pozn",label:"Pozn. (Furanflex)",type:"textarea"},
+      {key:"req_magma",label:"Magmarelax – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_magma_zpusob",label:"Magmarelax – způsob",type:"text"},
+      {key:"req_magma_pozn",label:"Pozn. (Magmarelax)",type:"textarea"},
+      {key:"req_krov",label:"Ošetření krovu – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_krov_zpusob",label:"Ošetření krovu – způsob",type:"text"},
+      {key:"req_krov_pozn",label:"Pozn. (ošetření krovu)",type:"textarea"},
+    ]},
+    {title:"Fasáda",fields:[
+      {key:"req_kzs",label:"KZS – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_kzs_material",label:"KZS – typ materiálu",type:"text"},
+      {key:"req_kzs_tloustka",label:"KZS – tloušťka (mm)",type:"number"},
+      {key:"req_kzs_pozn",label:"Pozn. (KZS)",type:"textarea"},
+      {key:"req_sokl",label:"Sokl – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_sokl_material",label:"Sokl – typ materiálu",type:"text"},
+      {key:"req_sokl_tloustka",label:"Sokl – tloušťka (mm)",type:"number"},
+      {key:"req_sokl_pozn",label:"Pozn. (sokl)",type:"textarea"},
+    ]},
+    {title:"Výplně otvorů",fields:[
+      {key:"req_okna_byt",label:"Okna byt – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_okna_byt_barva",label:"Okna byt – barva",type:"text"},
+      {key:"req_okna_byt_pozn",label:"Pozn. (okna byty – počty a rozměry)",type:"textarea"},
+      {key:"req_okna_sp",label:"Okna spol. prostory – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_okna_sp_barva",label:"Okna spol. prostory – barva",type:"text"},
+      {key:"req_okna_sp_pozn",label:"Pozn. (okna spol. prostory)",type:"textarea"},
+      {key:"req_okna_sut",label:"Okna suterén – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_okna_sut_barva",label:"Okna suterén – barva",type:"text"},
+      {key:"req_okna_sut_pozn",label:"Pozn. (okna suterén)",type:"textarea"},
+      {key:"req_dvere",label:"Vchodové dveře – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_dvere_barva",label:"Vchodové dveře – barva",type:"text"},
+      {key:"req_dvere_provedeni",label:"Vchodové dveře – provedení",type:"text"},
+      {key:"req_dvere_pozn",label:"Pozn. (vchodové dveře)",type:"textarea"},
+    ]},
+    {title:"Balkony, Lodžie, Terasy",fields:[
+      {key:"req_balk_op",label:"Balkony oprava – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_balk_op_rozmer",label:"Balkony oprava – vnější rozměr",type:"text"},
+      {key:"req_balk_op_zabradli",label:"Balkony oprava – zábradlí",type:"text"},
+      {key:"req_balk_op_pozn",label:"Pozn. (balkony oprava)",type:"textarea"},
+      {key:"req_antigraffiti",label:"Antigraffiti – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_antigraffiti_pozn",label:"Pozn. (antigraffiti)",type:"textarea"},
+      {key:"req_mod_os",label:"Modernizace OS – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_mod_os_pozn",label:"Pozn. (modernizace OS)",type:"textarea"},
+      {key:"req_balk_nove",label:"Balkony nové – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_balk_nove_rozmer",label:"Balkony nové – rozměr",type:"text"},
+      {key:"req_balk_nove_atyp",label:"Balkony nové – rozměr atyp",type:"text"},
+      {key:"req_balk_nove_zabradli",label:"Balkony nové – zábradlí",type:"text"},
+      {key:"req_balk_nove_pozn",label:"Pozn. (balkony nové)",type:"textarea"},
+      {key:"req_lodzie",label:"Lodžie nové – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_lodzie_rozmer",label:"Lodžie nové – rozměr",type:"text"},
+      {key:"req_lodzie_zabradli",label:"Lodžie nové – zábradlí",type:"text"},
+      {key:"req_lodzie_pozn",label:"Pozn. (lodžie nové)",type:"textarea"},
+      {key:"req_terasy",label:"Terasy nové – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_terasy_rozmer",label:"Terasy nové – rozměr (m)",type:"text"},
+      {key:"req_terasy_zabradli",label:"Terasy nové – zábradlí",type:"text"},
+    ]},
+    {title:"Suterén & Ostatní",fields:[
+      {key:"req_strop_sut",label:"Strop suterénu – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_strop_sut_zpusob",label:"Strop suterénu – způsob",type:"text"},
+      {key:"req_strop_sut_pozn",label:"Pozn. (strop suterénu – rozměr trámů š., v., mezera)",type:"textarea"},
+      {key:"req_hydroizolace",label:"Hydroizolace – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_hydro_vyska",label:"Hydroizolace – výška sut. nadpraží/podlaha",type:"number"},
+      {key:"req_hydro_pozn",label:"Pozn. (hydroizolace)",type:"textarea"},
+      {key:"req_okapovy",label:"Okapový chodníček – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_okapovy_pozn",label:"Pozn. (okapový chodníček)",type:"textarea"},
+      {key:"req_vytah",label:"Výtah – zájem",type:"select",options:["Ne","Ano – nový","Ano – modernizace"]},
+      {key:"req_vytah_pozn",label:"Pozn. (výtah)",type:"textarea"},
+      {key:"pozn_req",label:"Poznámka (ostatní)",type:"textarea"},
+    ]},
+  ]},
+  {key:"technologie",label:"Technologie",icon:"⚡",color:"#b7700a",accent:"#fef6e7",groups:[
+    {title:"FVE & Energie",fields:[
+      {key:"req_fve",label:"FVE – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_tuv",label:"TUV – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"req_spotr_byty",label:"Spotřeba byty (kWh)",type:"number"},
+      {key:"req_naklady_plyn",label:"Náklady na plyn (Kč)",type:"number"},
+      {key:"req_spotr_plyn",label:"Spotřeba plynu (m³)",type:"number"},
+      {key:"req_spotr_sp",label:"Spotřeba spol. prostory (kWh)",type:"number"},
+      {key:"req_naklady_teplo",label:"Náklady na teplo (Kč)",type:"number"},
+      {key:"req_elektromery",label:"Elektroměry spol. prostor (ks)",type:"number"},
+      {key:"req_spotr_teplo",label:"Spotřeba tepla (GJ)",type:"number"},
+      {key:"req_fve_pozn",label:"Pozn. (FVE/energie)",type:"textarea"},
+      {key:"req_vyska_domu",label:"Výška domu (bm)",type:"number"},
+    ]},
+    {title:"Renovace fasády",fields:[
+      {key:"renovace",label:"Renovace – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"renovace_poskozeni",label:"Renovace – poškození",type:"textarea"},
+      {key:"renovace_pozn",label:"Pozn. (renovace)",type:"textarea"},
+    ]},
+    {title:"Opravy na domě – Historie",fields:[
+      {key:"hist_stity_rok",label:"Opravy na domě – rok štíty",type:"number"},
+      {key:"hist_pruceli_rok",label:"Opravy na domě – rok průčelí",type:"number"},
+      {key:"hist_strecha_rok",label:"Opravy na domě – rok střecha",type:"number"},
+      {key:"hist_okna_rok",label:"Opravy na domě – rok okna",type:"number"},
+      {key:"hist_sut_rok",label:"Opravy na domě – rok suterén",type:"number"},
+      {key:"hist_vytah_rok",label:"Opravy na domě – rok výtah",type:"number"},
+      {key:"hist_stity_tl",label:"Opravy na domě – tl./spec. štíty",type:"text"},
+      {key:"hist_pruceli_tl",label:"Opravy na domě – tl./spec. průčelí",type:"text"},
+      {key:"hist_strecha_tl",label:"Opravy na domě – tl./spec. střecha",type:"text"},
+      {key:"hist_okna_tl",label:"Opravy na domě – tl./spec. okna",type:"text"},
+      {key:"hist_sut_tl",label:"Opravy na domě – tl./spec. suterén",type:"text"},
+      {key:"hist_vytah_tl",label:"Opravy na domě – tl./spec. výtah",type:"text"},
+    ]},
+    {title:"Rekuperace",fields:[
+      {key:"rekup",label:"Rekuperace – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"rekup_druh",label:"Rekuperace – druh",type:"select",options:["Centrální","Decentrální"]},
+      {key:"rekup_1",label:"Rekuperace – BJ dispozice 1",type:"number"},
+      {key:"rekup_2",label:"Rekuperace – BJ dispozice 2",type:"number"},
+      {key:"rekup_3",label:"Rekuperace – BJ dispozice 3",type:"number"},
+      {key:"rekup_4",label:"Rekuperace – BJ dispozice 4",type:"number"},
+      {key:"rekup_5",label:"Rekuperace – BJ dispozice 5",type:"number"},
+      {key:"rekup_6",label:"Rekuperace – BJ dispozice 6",type:"number"},
+      {key:"rekup_pozn",label:"Pozn. (rekuperace)",type:"textarea"},
+    ]},
+    {title:"Elektroinstalace společných prostor",fields:[
+      {key:"elektro_sp",label:"Elektroinstalace spol. prostor – zájem",type:"select",options:["Ne","Ano"]},
+      {key:"elektro_fve",label:"Elektroinstalace – s FVE",type:"select",options:["Ne","Ano"]},
+      {key:"elektro_mistnosti",label:"Počet místností v suterénu",type:"number"},
+      {key:"elektro_chodby",label:"Délky chodeb v suterénu (bm)",type:"number"},
+      {key:"elektro_pozn",label:"Pozn. (elektroinstalace)",type:"textarea"},
+    ]},
+    {title:"Výběr technologického formuláře",fields:[
+      {key:"req_tc",label:"Tepelné čerpadlo – zájem",type:"select",options:["Ne","Ano – vyplnit záložku TČ"]},
+      {key:"req_kotelna",label:"Plynová kotelna – zájem",type:"select",options:["Ne","Ano – vyplnit záložku Kotelna"]},
+    ]},
+  ]},
+  {key:"tc",label:"Tepelné čerpadlo",icon:"🌡️",color:"#0f6b3e",accent:"#e6f4ed",groups:[
+    {title:"Formulář tepelné čerpadlo pro ohřev TV",fields:[
+      {key:"tc_vchody",label:"TČ – počet vchodů",type:"number"},
+      {key:"tc_bj",label:"TČ – počet BJ",type:"number"},
+      {key:"tc_spotr_tv",label:"TČ – spotřeba tepla na ohřev TV (GJ/rok)",type:"number"},
+      {key:"tc_pozn_spotr_tv",label:"Pozn.",type:"textarea"},
+      {key:"tc_spotr_voda",label:"TČ – spotřeba TV (m³/rok)",type:"number"},
+      {key:"tc_pozn_voda",label:"Pozn.",type:"textarea"},
+      {key:"tc_cena_gj",label:"TČ – cena za GJ tepla (Kč)",type:"number"},
+      {key:"tc_pozn_gj",label:"Pozn.",type:"textarea"},
+      {key:"tc_cena_mwh",label:"TČ – cena za MWh elektrické energie (Kč)",type:"number"},
+      {key:"tc_pozn_mwh",label:"Pozn.",type:"textarea"},
+      {key:"tc_poznamka",label:"Poznámka",type:"textarea"},
+      {key:"tc_umisteni",label:"TČ – možnost umístění",type:"textarea",photo:true},
+      {key:"tc_pozn_umisteni",label:"Pozn.",type:"textarea"},
+      {key:"tc_zdroje",label:"TČ – stávající zdroje tepla",type:"text"},
+      {key:"tc_pozn_zdroje",label:"Pozn.",type:"textarea"},
+      {key:"tc_predavaci",label:"TČ – předávací stanice",type:"text",photo:true},
+      {key:"tc_pozn_predavaci",label:"Pozn.",type:"textarea"},
+      {key:"tc_vzdalenost",label:"TČ – vzdálenost TČ a tech. místnosti (m)",type:"number"},
+      {key:"tc_pozn_vzdalenost",label:"Pozn.",type:"textarea"},
+      {key:"tc_zatepleni",label:"TČ – je objekt zateplený",type:"select",options:["Ne","Ano"]},
+      {key:"tc_rok_zatepleni",label:"TČ – rok zateplení",type:"number"},
+      {key:"tc_pozn_zatepleni",label:"Pozn.",type:"textarea"},
+      {key:"tc_vymena_oken",label:"TČ – vyměněná okna",type:"select",options:["Ne","Ano"]},
+      {key:"tc_pozn_okna",label:"Pozn.",type:"textarea"},
+      {key:"tc_poznamka2",label:"Závěrečná poznámka",type:"textarea"},
+    ]},
+  ]},
+  {key:"kotelna",label:"Plynová kotelna",icon:"🔥",color:"#7a2020",accent:"#fdeaea",groups:[
+    {title:"Formulář pro plynovou kotelnu",fields:[
+      {key:"ko_vchody",label:"Kotelna – počet vchodů",type:"number"},
+      {key:"ko_bj",label:"Kotelna – počet BJ",type:"number"},
+      {key:"ko_spotr_ut",label:"Kotelna – spotřeba tepla na topení (GJ/rok)",type:"number"},
+      {key:"ko_pozn_ut",label:"Pozn.",type:"textarea"},
+      {key:"ko_spotr_tv",label:"Kotelna – spotřeba TV (m³/rok)",type:"number"},
+      {key:"ko_pozn_tv",label:"Pozn.",type:"textarea"},
+      {key:"ko_cena_gj",label:"Kotelna – cena za GJ tepla (Kč)",type:"number"},
+      {key:"ko_pozn_gj",label:"Pozn.",type:"textarea"},
+      {key:"ko_cena_plyn",label:"Kotelna – cena za MWh plynu (m³)",type:"number"},
+      {key:"ko_pozn_plyn",label:"Pozn.",type:"textarea"},
+      {key:"ko_poznamka",label:"Poznámka",type:"textarea"},
+      {key:"ko_ztrata",label:"Kotelna – tepelná ztráta objektu (kW)",type:"number"},
+      {key:"ko_pozn_ztrata",label:"Pozn.",type:"textarea"},
+      {key:"ko_pripojka",label:"Kotelna – plynová přípojka",type:"select",options:["Ano","Ne","Neznámé"]},
+      {key:"ko_pozn_pripojka",label:"Pozn.",type:"textarea"},
+      {key:"ko_komin_typ",label:"Kotelna – komín typ",type:"select",options:["Zděný","Nerezový vložkovaný","Fasádní odvod","Jiný"],photo:true},
+      {key:"ko_komin_mat",label:"Kotelna – komín materiál",type:"text"},
+      {key:"ko_komin_vedeni",label:"Kotelna – komín vedení",type:"text",photo:true},
+      {key:"ko_komin_vyska",label:"Kotelna – výška komínu (bm)",type:"number"},
+      {key:"ko_komin_pocet",label:"Kotelna – počet komínů (ks)",type:"number"},
+      {key:"ko_pozn_komin",label:"Pozn.",type:"textarea"},
+      {key:"ko_otopna",label:"Kotelna – otopná soustava",type:"text"},
+      {key:"ko_pozn_otopna",label:"Pozn.",type:"textarea"},
+      {key:"ko_provoz",label:"Kotelna – způsob provozu",type:"text"},
+      {key:"ko_pozn_provoz",label:"Pozn.",type:"textarea"},
+      {key:"ko_zdroj",label:"Kotelna – stávající zdroj tepla",type:"text"},
+      {key:"ko_pozn_zdroj",label:"Pozn.",type:"textarea"},
+      {key:"ko_poznamka2",label:"Poznámka",type:"textarea"},
+      {key:"ko_predavaci",label:"Kotelna – předávací stanice",type:"text",photo:true},
+      {key:"ko_pozn_predavaci",label:"Pozn.",type:"textarea"},
+      {key:"ko_vzdal_ut",label:"Kotelna – vzdálenost tech. místnost–UT (m)",type:"number"},
+      {key:"ko_pozn_vzdal_ut",label:"Pozn.",type:"textarea"},
+      {key:"ko_vzdal_tv",label:"Kotelna – vzdálenost tech. místnost–TV (m)",type:"number"},
+      {key:"ko_pozn_vzdal_tv",label:"Pozn.",type:"textarea"},
+      {key:"ko_zatepleni",label:"Kotelna – je objekt zateplený",type:"select",options:["Ne","Ano"]},
+      {key:"ko_rok_zatepleni",label:"Kotelna – rok zateplení",type:"number"},
+      {key:"ko_pozn_zatepleni",label:"Pozn.",type:"textarea"},
+      {key:"ko_vymena_oken",label:"Kotelna – vyměněná okna",type:"select",options:["Ne","Ano"]},
+      {key:"ko_pozn_okna",label:"Pozn.",type:"textarea"},
+      {key:"ko_poznamka3",label:"Závěrečná poznámka",type:"textarea"},
+    ]},
+    {title:"📷 Fotodokumentace – povinné snímky",fields:[
+      {key:"foto_kotelna",label:"Foto – stará kotelna",type:"photo_only",photo:true},
+      {key:"foto_kotle",label:"Foto – kotle",type:"photo_only",photo:true},
+      {key:"foto_stitek",label:"Foto – štítek kotlů",type:"photo_only",photo:true},
+      {key:"foto_komin",label:"Foto – komín (prostup, střecha, fasáda)",type:"photo_only",photo:true},
+      {key:"foto_bojler",label:"Foto – bojler, štítek, napojení SV/TUV/cirkulace",type:"photo_only",photo:true},
+      {key:"foto_plyn",label:"Foto – plynové vedení, plynoměr, místo připojení",type:"photo_only",photo:true},
+      {key:"foto_mar",label:"Foto – regulace MAR",type:"photo_only",photo:true},
+      {key:"foto_expanzni",label:"Foto – expanzní nádrž",type:"photo_only",photo:true},
+      {key:"foto_penb",label:"Foto – PENB (průkaz energetické náročnosti)",type:"photo_only",photo:true},
+      {key:"foto_vymenik",label:"Foto – výměníková stanice / předávací místo",type:"photo_only",photo:true},
+    ]},
+  ]},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const state = { data: {}, photos: {}, activeTab: "zameni" };
+
+const allFields = TABS.flatMap(t => t.groups.flatMap(g => g.fields.filter(f => f.type !== "photo_only")));
+document.getElementById("total-count").textContent = allFields.length;
+
+function updateStats() {
+  const filled = allFields.filter(f => state.data[f.key] !== undefined && state.data[f.key] !== "").length;
+  document.getElementById("filled-count").textContent = filled;
+  const totalP = Object.values(state.photos).reduce((s,a)=>s+(a?.length||0),0);
+  document.getElementById("photo-count").textContent = totalP + (totalP===1?" fotka":totalP<5?" fotky":" fotek");
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const inner = document.getElementById("tabs-inner");
+  inner.innerHTML = "";
+  TABS.forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = "tab-btn" + (state.activeTab === t.key ? " active" : "");
+    btn.textContent = t.icon + " " + t.label;
+    if (state.activeTab === t.key) {
+      btn.style.color = t.color;
+      btn.style.borderBottomColor = t.color;
+    }
+    btn.onclick = () => { state.activeTab = t.key; render(); };
+    inner.appendChild(btn);
+  });
+}
+
+function renderField(f, tabColor) {
+  const hint = INFO[f.label];
+  const div = document.createElement("div");
+  div.className = "field";
+
+  if (f.type === "photo_only") {
+    div.innerHTML = `<label>${escHtml(f.label)}${hint ? infoBtn(hint) : ""}</label>`;
+    div.appendChild(makePhotoUpload(f.key));
+    return div;
+  }
+
+  const labelEl = document.createElement("label");
+  labelEl.innerHTML = escHtml(f.label) + (f.unit ? `<span class="unit">(${f.unit})</span>` : "") + (hint ? infoBtn(hint) : "");
+  div.appendChild(labelEl);
+
+  let input;
+  if (f.type === "textarea") {
+    input = document.createElement("textarea");
+    input.rows = 2;
+    input.placeholder = "Váš text…";
+    input.value = state.data[f.key] || "";
+  } else if (f.type === "select") {
+    input = document.createElement("select");
+    input.innerHTML = `<option value="">– vyberte –</option>` + f.options.map(o => `<option${state.data[f.key]===o?" selected":""}>${escHtml(o)}</option>`).join("");
+  } else {
+    input = document.createElement("input");
+    input.type = f.type === "number" ? "number" : "text";
+    input.placeholder = f.type === "number" ? "0" : "Zadejte hodnotu…";
+    input.value = state.data[f.key] || "";
+    if (f.type === "number") input.step = "any";
+  }
+  input.oninput = input.onchange = () => { state.data[f.key] = input.value; updateStats(); };
+  div.appendChild(input);
+
+  if (f.photo && f.type !== "photo_only") div.appendChild(makePhotoUpload(f.key));
+  return div;
+}
+
+function makePhotoUpload(key) {
+  const wrap = document.createElement("div");
+  wrap.id = "photo-wrap-" + key;
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.multiple = true;
+  fileInput.setAttribute("capture","environment");
+  fileInput.style.display = "none";
+  fileInput.onchange = e => {
+    Array.from(e.target.files).forEach(file => {
+      const r = new FileReader();
+      r.onload = ev => {
+        if (!state.photos[key]) state.photos[key] = [];
+        state.photos[key].push({name:file.name, data:ev.target.result});
+        updateStats();
+        refreshPhotoPreview(key);
+      };
+      r.readAsDataURL(file);
+    });
+    fileInput.value = "";
+  };
+
+  const btn = document.createElement("button");
+  btn.className = "photo-btn"; btn.type = "button";
+  btn.textContent = "📷 Přidat foto";
+  btn.onclick = () => fileInput.click();
+
+  const preview = document.createElement("div");
+  preview.className = "photo-preview";
+  preview.id = "photo-preview-" + key;
+
+  wrap.appendChild(fileInput);
+  wrap.appendChild(btn);
+  wrap.appendChild(preview);
+  refreshPhotoPreview(key, preview);
+  return wrap;
+}
+
+function refreshPhotoPreview(key, previewEl) {
+  const el = previewEl || document.getElementById("photo-preview-" + key);
+  if (!el) return;
+  el.innerHTML = "";
+  (state.photos[key] || []).forEach((img, i) => {
+    const thumb = document.createElement("div"); thumb.className = "photo-thumb";
+    const imgEl = document.createElement("img"); imgEl.src = img.data; imgEl.alt = img.name;
+    const rmBtn = document.createElement("button"); rmBtn.className = "remove-photo"; rmBtn.type = "button"; rmBtn.textContent = "×";
+    rmBtn.onclick = () => { state.photos[key].splice(i, 1); updateStats(); refreshPhotoPreview(key); };
+    thumb.appendChild(imgEl); thumb.appendChild(rmBtn);
+    el.appendChild(thumb);
+  });
+}
+
+function infoBtn(text) {
+  const escaped = text.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return `<button type="button" class="info-btn" tabindex="0">i<span class="tooltip-popup">${escHtml(text)}</span></button>`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function render() {
+  renderTabs();
+  const tab = TABS.find(t => t.key === state.activeTab);
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+  tab.groups.forEach(g => {
+    const card = document.createElement("div"); card.className = "group-card";
+    const hdr = document.createElement("div"); hdr.className = "group-header";
+    hdr.style.background = tab.accent; hdr.style.borderLeftColor = tab.color;
+    hdr.innerHTML = `<span style="color:${tab.color}">${escHtml(g.title)}</span>`;
+    const body = document.createElement("div"); body.className = "group-body";
+    g.fields.forEach(f => body.appendChild(renderField(f, tab.color)));
+    card.appendChild(hdr); card.appendChild(body);
+    content.appendChild(card);
+  });
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function exportXLSX() {
+  const btn = document.getElementById("export-btn");
+  btn.disabled = true; btn.textContent = "⏳ Exportuji…";
+  try {
+    const wb = XLSX.utils.book_new();
+    const rows = [["Sekce","Pole","Hodnota","Jednotka","Fotografie"]];
+    TABS.forEach(t => {
+      rows.push(["=== " + t.label + " ===","","","",""]);
+      t.groups.forEach(g => {
+        rows.push(["","— " + g.title + " —","","",""]);
+        g.fields.forEach(f => {
+          const val = f.type==="photo_only" ? "" : (state.data[f.key] ?? "");
+          const pics = (state.photos[f.key]||[]).map(p=>p.name).join(", ");
+          rows.push(["", f.label, val, f.unit||"", pics]);
+        });
+      });
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{wch:30},{wch:50},{wch:30},{wch:12},{wch:35}];
+    XLSX.utils.book_append_sheet(wb, ws, "Dotazník");
+    XLSX.writeFile(wb, "RBD_Dotaznik.xlsx");
+    btn.textContent = "✅ Staženo!"; btn.style.background = "#27ae60";
+    setTimeout(()=>{ btn.textContent="⬇ Export XLSX"; btn.style.background="#2ecc71"; btn.disabled=false; }, 3000);
+  } catch(e) {
+    alert("Chyba exportu: " + e.message);
+    btn.textContent = "⬇ Export XLSX"; btn.disabled = false;
+  }
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+render();
+updateStats();
+</script>
+</body>
+</html>
